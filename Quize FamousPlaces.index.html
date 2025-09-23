@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Famous Places Quiz</title>
+  <style>
+    :root{font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#f6f9ff,#eef7f3);margin:0;padding:20px}
+    .card{width:100%;max-width:720px;background:white;border-radius:12px;box-shadow:0 10px 30px rgba(20,20,60,0.08);padding:24px}
+    h1{margin:0 0 6px;font-size:20px}
+    p.lead{margin:0 0 18px;color:#555}
+    .question{font-size:18px;margin:18px 0}
+    .options{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    button.option{padding:12px;border-radius:8px;border:1px solid #e6e6e9;background:#fff;cursor:pointer;font-size:15px}
+    button.option:disabled{opacity:0.7;cursor:default}
+    .controls{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+    .score{font-weight:600}
+    .hidden{display:none}
+    .result{padding:12px;border-radius:8px;margin-top:12px}
+    .correct{background:#e6ffef;border:1px solid #b5f0c9;color:#0b6b3b}
+    .wrong{background:#fff0f0;border:1px solid #f2b4b4;color:#8a1f1f}
+    .footer{font-size:13px;color:#666;margin-top:12px}
+    .btn{padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+    .btn-primary{background:#2563eb;color:white}
+    .btn-ghost{background:transparent;border:1px solid #ddd}
+    .player-info{margin-bottom:20px}
+    .player-info input{padding:8px;width:calc(50% - 12px);margin-right:8px;margin-bottom:8px;border-radius:6px;border:1px solid #ccc}
+    .place-img{max-width:100%;border-radius:8px;margin-top:12px}
+    @media (max-width:520px){.options{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Famous Places Quiz</h1>
+    <p class="lead">Enter your details and start the quiz!</p>
+
+    <div id="playerForm" class="player-info">
+      <input type="text" id="playerName" placeholder="Your Name" required />
+      <input type="number" id="playerAge" placeholder="Your Age" required />
+      <button id="startBtn" class="btn btn-primary">Start Quiz</button>
+    </div>
+
+    <div id="quiz" class="hidden">
+      <div id="questionBox">
+        <div class="question" id="questionText"></div>
+        <img id="placeImg" class="place-img hidden" alt="Famous place image" />
+        <div class="options" id="options"></div>
+        <div id="feedback" class="result hidden"></div>
+      </div>
+
+      <div class="controls">
+        <div class="score">Score: <span id="score">0</span>/<span id="total">0</span></div>
+        <div>
+          <button id="nextBtn" class="btn btn-primary hidden">Next</button>
+          <button id="restartBtn" class="btn btn-ghost">Restart</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        Tip: You can change questions and images in the code. Save this file as <code>famous-places-quiz.html</code> and open it in any browser.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Quiz data: place -> correct country, wrong options, and an image
+    const questions = [
+      {place: 'Eiffel Tower', correct: 'France', wrong: ['Germany','Italy','Spain'], img: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg'},
+      {place: 'Great Wall', correct: 'China', wrong: ['Japan','Mongolia','South Korea'], img: 'https://upload.wikimedia.org/wikipedia/commons/1/10/20090529_Great_Wall_8185.jpg'},
+      {place: 'Machu Picchu', correct: 'Peru', wrong: ['Bolivia','Chile','Ecuador'], img: 'https://upload.wikimedia.org/wikipedia/commons/e/eb/Machu_Picchu%2C_Peru.jpg'},
+      {place: 'Taj Mahal', correct: 'India', wrong: ['Pakistan','Bangladesh','Nepal'], img: 'https://upload.wikimedia.org/wikipedia/commons/d/da/Taj-Mahal.jpg'},
+      {place: 'Statue of Liberty', correct: 'United States', wrong: ['United Kingdom','Canada','France'], img: 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Statue_of_Liberty_7.jpg'},
+      {place: 'Colosseum', correct: 'Italy', wrong: ['Greece','Turkey','Spain'], img: 'https://upload.wikimedia.org/wikipedia/commons/d/de/Colosseo_2020.jpg'},
+      {place: 'Sydney Opera House', correct: 'Australia', wrong: ['New Zealand','United Kingdom','Canada'], img: 'https://upload.wikimedia.org/wikipedia/commons/4/40/Sydney_Opera_House_Sails.jpg'},
+      {place: 'Christ the Redeemer', correct: 'Brazil', wrong: ['Argentina','Portugal','Spain'], img: 'https://upload.wikimedia.org/wikipedia/commons/6/6e/Cristo_Redentor_-_Rio_de_Janeiro%2C_Brasil.jpg'}
+    ];
+
+    function shuffle(array){
+      for(let i=array.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));[array[i],array[j]]=[array[j],array[i]];
+      }
+      return array;
+    }
+
+    let current = 0;
+    let score = 0;
+    const total = questions.length;
+
+    const qText = document.getElementById('questionText');
+    const optionsDiv = document.getElementById('options');
+    const feedback = document.getElementById('feedback');
+    const scoreEl = document.getElementById('score');
+    const totalEl = document.getElementById('total');
+    const nextBtn = document.getElementById('nextBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const quizDiv = document.getElementById('quiz');
+    const playerForm = document.getElementById('playerForm');
+    const startBtn = document.getElementById('startBtn');
+    const placeImg = document.getElementById('placeImg');
+
+    totalEl.textContent = total;
+
+    let order = shuffle([...Array(total).keys()]);
+
+    startBtn.onclick = ()=>{
+      const name = document.getElementById('playerName').value.trim();
+      const age = document.getElementById('playerAge').value.trim();
+      if(!name || !age){
+        alert('Please enter your name and age to start.');
+        return;
+      }
+      playerForm.classList.add('hidden');
+      quizDiv.classList.remove('hidden');
+      loadQuestion();
+    };
+
+    function loadQuestion(){
+      feedback.classList.add('hidden');
+      nextBtn.classList.add('hidden');
+      optionsDiv.innerHTML = '';
+      const qIndex = order[current];
+      const q = questions[qIndex];
+      qText.textContent = `Which country is home to the \"${q.place}\"?`;
+      placeImg.src = q.img;
+      placeImg.classList.remove('hidden');
+
+      const opts = shuffle([q.correct, ...q.wrong]);
+
+      opts.forEach(opt=>{
+        const btn = document.createElement('button');
+        btn.className = 'option';
+        btn.textContent = opt;
+        btn.onclick = ()=>selectOption(btn, q.correct);
+        optionsDiv.appendChild(btn);
+      });
+    }
+
+    function selectOption(button, correctAnswer){
+      Array.from(optionsDiv.children).forEach(b=>b.disabled=true);
+
+      const selected = button.textContent;
+      if(selected === correctAnswer){
+        button.classList.add('correct');
+        showFeedback(true, `Correct — ${correctAnswer}!`);
+        score++;
+        scoreEl.textContent = score;
+      } else {
+        button.classList.add('wrong');
+        Array.from(optionsDiv.children).forEach(b=>{
+          if(b.textContent===correctAnswer) b.classList.add('correct');
+        });
+        showFeedback(false, `Wrong — correct answer: ${correctAnswer}.`);
+      }
+
+      if(current < total-1){
+        nextBtn.classList.remove('hidden');
+      } else {
+        nextBtn.textContent = 'See Results';
+        nextBtn.classList.remove('hidden');
+      }
+    }
+
+    function showFeedback(isCorrect, text){
+      feedback.className = 'result ' + (isCorrect? 'correct' : 'wrong');
+      feedback.textContent = text;
+    }
+
+    nextBtn.onclick = ()=>{
+      if(current < total-1){
+        current++;
+        nextBtn.textContent = 'Next';
+        loadQuestion();
+      } else {
+        showFinal();
+      }
+    };
+
+    restartBtn.onclick = ()=>{
+      current=0;score=0;scoreEl.textContent=score;order=shuffle([...Array(total).keys()]);nextBtn.textContent='Next';loadQuestion();
+    };
+
+    function showFinal(){
+      optionsDiv.innerHTML = '';
+      qText.textContent = 'Quiz finished!';
+      placeImg.classList.add('hidden');
+      feedback.className = 'result';
+      feedback.innerHTML = `You scored <strong>${score}</strong> out of <strong>${total}</strong>.`;
+      nextBtn.classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
