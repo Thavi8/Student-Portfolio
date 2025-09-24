@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Famous Places Quiz</title>
+  <style>
+    /* A more cohesive color palette for a polished look */
+    :root {
+      --primary-blue: #2563eb;
+      --primary-green: #10b981;
+      --primary-red: #ef4444;
+      --light-green-bg: #d1fae5;
+      --light-red-bg: #fee2e2;
+      --text-color: #333;
+      --secondary-text: #6b7280;
+      --card-bg: white;
+      --border-color: #e5e7eb;
+    }
+
+    body {
+      font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #f6f9ff, #eef7f3);
+      margin: 0;
+      padding: 20px;
+      color: var(--text-color);
+    }
+
+    .card {
+      width: 100%;
+      max-width: 720px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(20, 20, 60, 0.08);
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    p.lead {
+      margin: 0 0 18px;
+      color: var(--secondary-text);
+    }
+
+    .question {
+      font-size: 20px;
+      margin: 18px 0;
+      font-weight: 600;
+    }
+
+    .options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    button.option {
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #fff;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    button.option:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    }
+
+    button.option:disabled {
+      opacity: 0.7;
+      cursor: default;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 18px;
+    }
+
+    .score {
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .result {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Feedback colors using the new palette */
+    .correct {
+      background: var(--light-green-bg);
+      border: 1px solid var(--primary-green);
+      color: var(--primary-green);
+    }
+
+    .wrong {
+      background: var(--light-red-bg);
+      border: 1px solid var(--primary-red);
+      color: var(--primary-red);
+    }
+
+    .footer {
+      font-size: 13px;
+      color: var(--secondary-text);
+      margin-top: 12px;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary-blue);
+      color: white;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+    }
+
+    .player-info {
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .player-info input {
+      padding: 10px;
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .difficulty-select {
+      margin-bottom: 12px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .difficulty-select button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: #f9fafb;
+      cursor: pointer;
+    }
+
+    .difficulty-select button.active {
+      background: var(--primary-blue);
+      color: white;
+      border-color: var(--primary-blue);
+    }
+    
+    .place-img {
+      max-width: 100%;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+
+    .results-card {
+      text-align: center;
+    }
+    .results-card h2 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .results-card p {
+      font-size: 18px;
+      color: var(--secondary-text);
+    }
+    .medal {
+      font-size: 40px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 520px) {
+      .options {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div id="startScreen">
+      <h1>Famous Places Quiz</h1>
+      <p class="lead">Enter your details and select a difficulty to start the quiz!</p>
+
+      <div class="player-info">
+        <input type="text" id="playerName" placeholder="Your Name" required />
+        <input type="number" id="playerAge" placeholder="Your Age" required />
+      </div>
+
+      <div class="difficulty-select">
+        <button class="btn btn-ghost" data-difficulty="easy">Easy</button>
+        <button class="btn btn-ghost" data-difficulty="medium">Medium</button>
+        <button class="btn btn-ghost" data-difficulty="hard">Hard</button>
+      </div>
+      
+      <button id="startBtn" class="btn btn-primary" disabled>Start Quiz</button>
+    </div>
+
+    <div id="quiz" class="hidden">
+      <div id="questionBox">
+        <div class="question" id="questionText"></div>
+        <img id="placeImg" class="place-img hidden" alt="Famous place image" />
+        <div class="options" id="options"></div>
+        <div id="feedback" class="result hidden"></div>
+      </div>
+
+      <div class="controls">
+        <div class="score">Score: <span id="score">0</span>/<span id="total">0</span></div>
+        <div>
+          <button id="nextBtn" class="btn btn-primary hidden">Next</button>
+        </div>
+      </div>
+
+      <div class="footer">
+        Tip: You can change questions and images in the code.
+      </div>
+    </div>
+
+    <div id="finalScreen" class="hidden results-card">
+      <h2 id="finalScore"></h2>
+      <p id="finalMessage"></p>
+      <div id="medal" class="medal"></div>
+      <button id="restartBtn" class="btn btn-primary">Play Again</button>
+    </div>
+  </div>
+
+  <script>
+    const questions = [
+      {place: 'Eiffel Tower', correct: 'France', options: ['Germany','Italy','Spain','United Kingdom','Japan'], img: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg'},
+      {place: 'Great Wall', correct: 'China', options: ['Japan','Mongolia','South Korea','Thailand','Vietnam'], img: 'https://upload.wikimedia.org/wikipedia/commons/1/10/20090529_Great_Wall_8185.jpg'},
+      {place: 'Machu Picchu', correct: 'Peru', options: ['Bolivia','Chile','Ecuador','Brazil','Colombia'], img: 'https://upload.wikimedia.org/wikipedia/commons/e/eb/Machu_Picchu%2C_Peru.jpg'},
+      {place: 'Taj Mahal', correct: 'India', options: ['Pakistan','Bangladesh','Nepal','Sri Lanka','Bhutan'], img: 'https://upload.wikimedia.org/wikipedia/commons/d/da/Taj-Mahal.jpg'},
+      {place: 'Statue of Liberty', correct: 'United States', options: ['United Kingdom','Canada','France','Mexico','Spain'], img: 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Statue_of_Liberty_7.jpg'},
+      {place: 'Colosseum', correct: 'Italy', options: ['Greece','Turkey','Spain','Egypt','Germany'], img: 'https://upload.wikimedia.org/wikipedia/commons/d/de/Colosseo_2020.jpg'},
+      {place: 'Sydney Opera House', correct: 'Australia', options: ['New Zealand','United Kingdom','Canada','Japan','Singapore'], img: 'https://upload.wikimedia.org/wikipedia/commons/4/40/Sydney_Opera_House_Sails.jpg'},
+      {place: 'Christ the Redeemer', correct: 'Brazil', options: ['Argentina','Portugal','Spain','Venezuela','Chile'], img: 'https://upload.wikimedia.org/wikipedia/commons/6/6e/Cristo_Redentor_-_Rio_de_Janeiro%2C_Brasil.jpg'}
+    ];
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    let current = 0;
+    let score = 0;
+    let totalQuestions = questions.length;
+    let quizOrder = [];
+    let difficulty = 'easy';
+
+    const startScreen = document.getElementById('startScreen');
+    const quizDiv = document.getElementById('quiz');
+    const finalScreen = document.getElementById('finalScreen');
+    const qText = document.getElementById('questionText');
+    const optionsDiv = document.getElementById('options');
+    const feedback = document.getElementById('feedback');
+    const scoreEl = document.getElementById('score');
+    const totalEl = document.getElementById('total');
+    const nextBtn = document.getElementById('nextBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const placeImg = document.getElementById('placeImg');
+    const startBtn = document.getElementById('startBtn');
+    const difficultyButtons = document.querySelectorAll('.difficulty-select button');
+    const playerNameInput = document.getElementById('playerName');
+    const playerAgeInput = document.getElementById('playerAge');
+
+    // Enable/disable start button based on form input
+    [playerNameInput, playerAgeInput].forEach(input => {
+      input.addEventListener('input', () => {
+        if (playerNameInput.value.trim() && playerAgeInput.value.trim() && difficulty) {
+          startBtn.disabled = false;
+        } else {
+          startBtn.disabled = true;
+        }
+      });
+    });
+
+    // Difficulty selection logic
+    difficultyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        difficultyButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        difficulty = btn.dataset.difficulty;
+        if (playerNameInput.value.trim() && playerAgeInput.value.trim()) {
+          startBtn.disabled = false;
+        }
+      });
+    });
+
+    // Start the quiz
+    startBtn.onclick = () => {
+      startScreen.classList.add('hidden');
+      quizDiv.classList.remove('hidden');
+      quizOrder = shuffle([...Array(totalQuestions).keys()]);
+      totalEl.textContent = totalQuestions;
+      loadQuestion();
+    };
+
+    function loadQuestion() {
+      feedback.classList.add('hidden');
+      nextBtn.classList.add('hidden');
+      optionsDiv.innerHTML = '';
+
+      const qIndex = quizOrder[current];
+      const q = questions[qIndex];
+      qText.textContent = `Which country is home to the "${q.place}"?`;
+      placeImg.src = q.img;
+      placeImg.classList.remove('hidden');
+
+      // Determine number of options based on difficulty
+      let opts = [];
+      if (difficulty === 'easy') {
+        opts = shuffle([q.correct, ...q.options.slice(0, 3)]);
+      } else if (difficulty === 'medium') {
+        opts = shuffle([q.correct, ...q.options.slice(0, 5)]);
+      } else { // hard
+        opts = shuffle([q.correct, ...q.options]);
+      }
+
+      opts.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'option';
+        btn.textContent = opt;
+        btn.onclick = () => selectOption(btn, q.correct);
+        optionsDiv.appendChild(btn);
+      });
+    }
+
+    function selectOption(button, correctAnswer) {
+      Array.from(optionsDiv.children).forEach(b => b.disabled = true);
+
+      const selected = button.textContent;
+      if (selected === correctAnswer) {
+        button.classList.add('correct');
+        showFeedback(true, 'Correct!');
+        score++;
+        scoreEl.textContent = score;
+      } else {
+        button.classList.add('wrong');
+        Array.from(optionsDiv.children).forEach(b => {
+          if (b.textContent === correctAnswer) b.classList.add('correct');
+        });
+        showFeedback(false, `Wrong! The correct answer is ${correctAnswer}.`);
+      }
+
+      nextBtn.classList.remove('hidden');
+    }
+
+    function showFeedback(isCorrect, text) {
+      feedback.classList.remove('hidden');
+      feedback.className = 'result ' + (isCorrect ? 'correct' : 'wrong');
+      const icon = isCorrect ? '✅' : '❌';
+      feedback.innerHTML = `${icon} ${text}`;
+    }
+
+    nextBtn.onclick = () => {
+      if (current < totalQuestions - 1) {
+        current++;
+        nextBtn.textContent = 'Next';
+        loadQuestion();
+      } else {
+        showFinal();
+      }
+    };
+
+    restartBtn.onclick = () => {
+      current = 0;
+      score = 0;
+      scoreEl.textContent = score;
+      nextBtn.textContent = 'Next';
+      startScreen.classList.remove('hidden');
+      finalScreen.classList.add('hidden');
+      document.getElementById('playerName').value = '';
+      document.getElementById('playerAge').value = '';
+      difficultyButtons.forEach(b => b.classList.remove('active'));
+      startBtn.disabled = true;
+    };
+
+    function showFinal() {
+      quizDiv.classList.add('hidden');
+      finalScreen.classList.remove('hidden');
+      
+      const percentage = (score / totalQuestions) * 100;
+      let medal = '';
+      let message = '';
+
+      if (percentage >= 90) {
+        medal = '🥇';
+        message = 'You earned a Gold Medal! You\'re a world traveler!';
+      } else if (percentage >= 70) {
+        medal = '🥈';
+        message = 'You earned a Silver Medal! Great job!';
+      } else if (percentage >= 50) {
+        medal = '🥉';
+        message = 'You earned a Bronze Medal! Keep learning!';
+      } else {
+        message = 'Better luck next time!';
+      }
+
+      document.getElementById('finalScore').textContent = `You scored ${score} out of ${totalQuestions}.`;
+      document.getElementById('finalMessage').textContent = message;
+      document.getElementById('medal').textContent = medal;
+    }
+  </script>
+</body>
+</html>
