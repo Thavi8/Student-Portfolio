@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CSV Quick Analyzer — GitHub Pages friendly</title>
+
+  <!-- Bootstrap for layout & tooltips -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- PapaParse for CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- Chart.js for charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    body { padding: 1.25rem; background:#fafafa; }
+    .table-wrap { max-height:420px; overflow:auto; border:1px solid #e6e6e6; background:white; }
+    th.sticky, td.sticky { position: sticky; top: 0; background: #fff; z-index: 2; }
+    tr.anomaly { background: rgba(255, 220, 180, 0.55) !important; }
+    td.num { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; }
+    .stat-card { font-size: .95rem; }
+    .small-muted { font-size: .85rem; color:#6c757d; }
+    .highlight { font-weight:600; color:#0b5ed7; }
+    .controls-row { gap: .75rem; }
+    .filter-input { width:100%; }
+    .chart-wrap { height: 320px; }
+    .help { font-size: .9rem; color:#495057; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>CSV Quick Analyzer</h2>
+    <p class="small-muted">Upload a CSV, inspect data, compute numeric stats, find anomalies (SD & z-score), filter and visualize. Works with any CSV schema.</p>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <label class="form-label">Choose CSV file</label>
+        <input class="form-control" id="fileInput" type="file" accept=".csv,text/csv" />
+        <div class="form-text">Tip: use UTF-8 CSVs; PapaParse will try to detect delimiters.</div>
+        <hr>
+        <div class="row controls-row align-items-center">
+          <div class="col-auto">
+            <label class="form-label">Anomaly Method</label>
+            <select id="anomalyMethod" class="form-select">
+              <option value="sd">Std Dev threshold (|value - mean| > k * SD)</option>
+              <option value="z">Z-score (|z| > threshold)</option>
+              <option value="both">Either (SD or Z)</option>
+            </select>
+          </div>
+
+          <div class="col-auto">
+            <label class="form-label">SD multiplier (k)</label>
+            <input id="sdMultiplier" type="number" step="0.1" min="0" class="form-control" value="3" title="Commonly 2-3" />
+          </div>
+
+          <div class="col-auto">
+            <label class="form-label">Z threshold</label>
+            <input id="zThreshold" type="number" step="0.1" min="0" class="form-control" value="3" />
+          </div>
+
+          <div class="col-auto">
+            <label class="form-label">&nbsp;</label>
+            <div>
+              <button id="detectBtn" class="btn btn-primary">Detect anomalies</button>
+              <button id="toggleOnlyAnom" class="btn btn-outline-secondary" title="Show only rows marked anomalous">Show only anomalies</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-lg-8">
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5 class="card-title">Data preview</h5>
+            <div class="mb-2">
+              <label class="form-label">Rows per page</label>
+              <select id="rowsPerPage" class="form-select w-auto d-inline-block">
+                <option>25</option><option>50</option><option>100</option><option>500</option>
+              </select>
+              <span class="small-muted ms-3">Use column filters below to find rows quickly.</span>
+            </div>
+
+            <div id="tableContainer" class="table-wrap">
+              <table id="dataTable" class="table table-sm table-hover">
+                <!-- created dynamically -->
+              </table>
+            </div>
+
+            <div class="mt-2 d-flex justify-content-between align-items-center">
+              <div>
+                <button id="prevPage" class="btn btn-outline-secondary btn-sm">Prev</button>
+                <button id="nextPage" class="btn btn-outline-secondary btn-sm">Next</button>
+                <span id="pageInfo" class="ms-2 small-muted"></span>
+              </div>
+
+              <div>
+                <button id="downloadFiltered" class="btn btn-outline-success btn-sm">Download current view (CSV)</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-body">
+            <h5>Column filters (per column)</h5>
+            <div id="filtersArea" class="row gy-2">
+              <!-- dynamic filter inputs -->
+            </div>
+            <div class="mt-2">
+              <button id="applyFilters" class="btn btn-primary btn-sm">Apply filters</button>
+              <button id="clearFilters" class="btn btn-outline-secondary btn-sm">Clear</button>
+              <span class="small-muted ms-3">You can combine filters across columns.</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5>Numeric column stats</h5>
+            <div id="statsArea" class="row g-2">
+              <!-- stats cards -->
+            </div>
+            <div class="mt-2">
+              <small class="help">Stats computed per numeric column: count, mean, median, min, max, std dev. Hover labels for help.</small>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5>Visualize</h5>
+            <div class="mb-2">
+              <label class="form-label">X column (for scatter/time)</label>
+              <select id="xColumn" class="form-select"></select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Y column</label>
+              <select id="yColumn" class="form-select"></select>
+            </div>
+            <div class="mb-2">
+              <label class="form-label">Chart type</label>
+              <select id="chartType" class="form-select">
+                <option value="scatter">Scatter</option>
+                <option value="line">Line (order by X)</option>
+                <option value="hist">Histogram (Y only)</option>
+              </select>
+            </div>
+
+            <div class="d-grid gap-2">
+              <button id="drawChart" class="btn btn-outline-primary btn-sm">Draw chart</button>
+            </div>
+
+            <div class="mt-3 chart-wrap">
+              <canvas id="chartCanvas"></canvas>
+            </div>
+
+            <div class="mt-2">
+              <small class="small-muted">Tip: choose numeric columns. If X is a parseable date, line chart will use temporal order.</small>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <footer class="text-muted small">
+      Built with <span title="PapaParse">PapaParse</span> + <span title="Chart.js">Chart.js</span>. CSV analyzer — no schema assumptions. Tooltips: hover UI elements.
+    </footer>
+  </div>
+
+<script>
+/* CSV Quick Analyzer single-file app
+   - Uses PapaParse for CSV parsing
+   - Chart.js for visualization
+   - Computes stats per numeric column
+   - Detects anomalies (SD multiplier or z-score)
+   - Column filters and "show only anomalies" toggle
+*/
+
+/* -------------------------
+   Utility math helpers
+   ------------------------- */
+function isNumericArray(arr) {
+  return arr.every(v => v === null || v === undefined || v === "" || (!isNaN(Number(v)) && isFinite(Number(v))));
+}
+function asNumber(v) {
+  if (v === null || v === undefined) return NaN;
+  if (v === "") return NaN;
+  let n = Number(v);
+  return isFinite(n) ? n : NaN;
+}
+function mean(values) {
+  const nums = values.filter(v => !isNaN(v));
+  if (!nums.length) return NaN;
+  return nums.reduce((s,a)=>s+a,0)/nums.length;
+}
+function median(values) {
+  const nums = values.filter(v => !isNaN(v)).sort((a,b)=>a-b);
+  if (!nums.length) return NaN;
+  const mid = Math.floor(nums.length/2);
+  return nums.length % 2 ? nums[mid] : (nums[mid-1]+nums[mid])/2;
+}
+function stddev(values) {
+  const nums = values.filter(v => !isNaN(v));
+  if (nums.length < 2) return 0;
+  const m = mean(nums);
+  const variance = nums.reduce((s,x)=> s + Math.pow(x - m, 2), 0) / (nums.length - 1);
+  return Math.sqrt(variance);
+}
+function quantize(v) { return (isNaN(v) ? "" : Number(v)); }
+
+/* -------------------------
+   App state
+   ------------------------- */
+let rawData = [];        // array of objects (rows)
+let headers = [];        // array of header strings
+let numericCols = [];    // header names that are numeric (by detection)
+let colStats = {};       // stats per numeric column
+let anomalies = new Set(); // set of row indices flagged anomalous
+let filteredIdx = null;  // array of row indices current after filters (or null -> all)
+let currentPage = 0;
+let rowsPerPage = 25;
+let chart = null;
+
+/* -------------------------
+   DOM refs
+   ------------------------- */
+const fileInput = document.getElementById('fileInput');
+const dataTable = document.getElementById('dataTable');
+const tableContainer = document.getElementById('tableContainer');
+const statsArea = document.getElementById('statsArea');
+const filtersArea = document.getElementById('filtersArea');
+const detectBtn = document.getElementById('detectBtn');
+const sdMultiplierInput = document.getElementById('sdMultiplier');
+const zThresholdInput = document.getElementById('zThreshold');
+const anomalyMethod = document.getElementById('anomalyMethod');
+const toggleOnlyAnomBtn = document.getElementById('toggleOnlyAnom');
+const applyFiltersBtn = document.getElementById('applyFilters');
+const clearFiltersBtn = document.getElementById('clearFilters');
+const rowsPerPageSelect = document.getElementById('rowsPerPage');
+const prevPageBtn = document.getElementById('prevPage');
+const nextPageBtn = document.getElementById('nextPage');
+const pageInfo = document.getElementById('pageInfo');
+const xColumn = document.getElementById('xColumn');
+const yColumn = document.getElementById('yColumn');
+const chartType = document.getElementById('chartType');
+const drawChartBtn = document.getElementById('drawChart');
+const chartCanvas = document.getElementById('chartCanvas');
+const downloadFilteredBtn = document.getElementById('downloadFiltered');
+
+/* -------------------------
+   CSV loading
+   ------------------------- */
+fileInput.addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  Papa.parse(f, {
+    header: true,
+    dynamicTyping: false,
+    skipEmptyLines: true,
+    preview: 0,
+    complete: function(results) {
+      headers = results.meta.fields || [];
+      rawData = results.data.map(row => {
+        // Keep original string values
+        return {...row};
+      });
+      currentPage = 0;
+      filteredIdx = null;
+      computeColumnTypesAndStats();
+      buildFilters();
+      renderTable();
+      renderStats();
+      populateColumnSelectors();
+      anomalies.clear();
+      showMessage(`Loaded ${rawData.length} rows, ${headers.length} columns.`);
+    },
+    error: function(err) {
+      showMessage('CSV parse error: ' + err.message, true);
+    }
+  });
+});
+
+/* -------------------------
+   Column detection & stats
+   ------------------------- */
+function computeColumnTypesAndStats() {
+  numericCols = [];
+  colStats = {};
+  // Inspect each column
+  for (const h of headers) {
+    const colValues = rawData.map(r=> r[h] === undefined ? "" : r[h]);
+    // Check numeric-like
+    const numericLike = isNumericArray(colValues);
+    if (numericLike) {
+      numericCols.push(h);
+      const nums = colValues.map(asNumber);
+      const cnt = nums.filter(n=>!isNaN(n)).length;
+      const m = mean(nums);
+      const med = median(nums);
+      const mn = Math.min(...nums.filter(n=>!isNaN(n)));
+      const mx = Math.max(...nums.filter(n=>!isNaN(n)));
+      const sd = stddev(nums);
+      colStats[h] = {count: cnt, mean: m, median: med, min: mn, max: mx, sd: sd};
+    }
+  }
+}
+
+/* -------------------------
+   Filters UI and logic
+   ------------------------- */
+function buildFilters() {
+  filtersArea.innerHTML = '';
+  if (!headers.length) return;
+  // For each column, create a filter control (text input) and operator select
+  headers.forEach((h, idx) => {
+    const colDiv = document.createElement('div');
+    colDiv.className = 'col-12';
+    colDiv.innerHTML = `
+      <div class="input-group input-group-sm">
+        <span class="input-group-text" title="Column name">${h}</span>
+        <select class="form-select filter-op" data-col="${h}" title="Operator">
+          <option value="contains">contains</option>
+          <option value="=">=</option>
+          <option value="!=">!=</option>
+          <option value=">">></option>
+          <option value="<"><</option>
+          <option value=">=">>=</option>
+          <option value="<="><=</option>
+          <option value="empty">is empty</option>
+          <option value="notempty">not empty</option>
+        </select>
+        <input class="form-control filter-val" data-col="${h}" placeholder="value (leave blank for empty ops)" />
+      </div>`;
+    filtersArea.appendChild(colDiv);
+  });
+}
+
+function applyFilters() {
+  // Build array of active filters
+  const ops = Array.from(document.querySelectorAll('.filter-op'));
+  const vals = Array.from(document.querySelectorAll('.filter-val'));
+  const filters = [];
+  for (const opEl of ops) {
+    const col = opEl.dataset.col;
+    const op = opEl.value;
+    const valEl = vals.find(v => v.dataset.col === col);
+    const rawVal = valEl ? valEl.value.trim() : '';
+    if (op === 'empty' || op === 'notempty' || rawVal !== '') {
+      filters.push({col, op, val: rawVal});
+    }
+  }
+  // Evaluate each row and keep indices passing all filters
+  const passIdx = [];
+  rawData.forEach((row, i) => {
+    let ok = true;
+    for (const f of filters) {
+      const cell = (row[f.col] === undefined ? '' : String(row[f.col]));
+      switch(f.op) {
+        case 'contains':
+          if (!cell.toLowerCase().includes(f.val.toLowerCase())) ok = false;
+          break;
+        case '=':
+          if (cell !== f.val) ok = false;
+          break;
+        case '!=':
+          if (cell === f.val) ok = false;
+          break;
+        case '>':
+        case '<':
+        case '>=':
+        case '<=':
+          // numeric compare if possible, otherwise lexicographic
+          const a = asNumber(cell), b = asNumber(f.val);
+          if (!isNaN(a) && !isNaN(b)) {
+            if (f.op === '>' && !(a > b)) ok = false;
+            if (f.op === '<' && !(a < b)) ok = false;
+            if (f.op === '>=' && !(a >= b)) ok = false;
+            if (f.op === '<=' && !(a <= b)) ok = false;
+          } else {
+            if (f.op === '>' && !(cell > f.val)) ok = false;
+            if (f.op === '<' && !(cell < f.val)) ok = false;
+            if (f.op === '>=' && !(cell >= f.val)) ok = false;
+            if (f.op === '<=' && !(cell <= f.val)) ok = false;
+          }
+          break;
+        case 'empty':
+          if (cell !== '') ok = false;
+          break;
+        case 'notempty':
+          if (cell === '') ok = false;
+          break;
+        default:
+          break;
+      }
+      if (!ok) break;
+    }
+    if (ok) passIdx.push(i);
+  });
+  filteredIdx = passIdx;
+  currentPage = 0;
+  renderTable();
+}
+
+/* -------------------------
+   Table rendering & pagination
+   ------------------------- */
+function renderTable() {
+  // Build index list: either filteredIdx or all indices
+  const indices = filteredIdx ? filteredIdx.slice() : rawData.map((_,i)=>i);
+  const showOnlyAnom = toggleOnlyAnomBtn.classList.contains('active');
+  let filteredList = indices;
+  if (showOnlyAnom) {
+    filteredList = indices.filter(i => anomalies.has(i));
+  }
+  const totalRows = filteredList.length;
+  rowsPerPage = Number(rowsPerPageSelect.value) || 25;
+  const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
+  if (currentPage >= totalPages) currentPage = totalPages - 1;
+  const start = currentPage * rowsPerPage;
+  const end = Math.min(totalRows, start + rowsPerPage);
+  const pageSlice = filteredList.slice(start, end);
+
+  // Build header
+  let html = '<thead><tr>';
+  headers.forEach(h => {
+    html += `<th class="sticky" scope="col">${escapeHtml(h)}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  // rows
+  pageSlice.forEach(idx => {
+    const row = rawData[idx];
+    const isAn = anomalies.has(idx);
+    html += `<tr data-idx="${idx}" class="${isAn ? 'anomaly' : ''}">`;
+    headers.forEach(h => {
+      const val = row[h] === undefined ? '' : row[h];
+      const cls = numericCols.includes(h) ? 'num' : '';
+      html += `<td class="${cls}">${escapeHtml(val)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  dataTable.innerHTML = html;
+  pageInfo.textContent = `Showing ${start+1}-${end} of ${totalRows} rows (page ${currentPage+1}/${totalPages})`;
+}
+
+/* -------------------------
+   Stats rendering
+   ------------------------- */
+function renderStats() {
+  statsArea.innerHTML = '';
+  if (!numericCols.length) {
+    statsArea.innerHTML = '<div class="small-muted">No numeric columns detected.</div>';
+    return;
+  }
+  numericCols.forEach(col => {
+    const s = colStats[col] || {count:0, mean:NaN, median:NaN, min:NaN, max:NaN, sd:0};
+    const card = document.createElement('div');
+    card.className = 'col-12 stat-card';
+    card.innerHTML = `
+      <div class="card">
+        <div class="card-body p-2">
+          <div class="d-flex justify-content-between">
+            <div><strong>${escapeHtml(col)}</strong> <span class="small-muted">numeric</span></div>
+            <div class="small-muted">n=${s.count}</div>
+          </div>
+          <div class="d-flex gap-2 mt-2 small">
+            <div>mean <span class="highlight">${formatNumber(s.mean)}</span></div>
+            <div>median <span class="highlight">${formatNumber(s.median)}</span></div>
+            <div>sd <span class="highlight">${formatNumber(s.sd)}</span></div>
+            <div>min <span class="highlight">${formatNumber(s.min)}</span></div>
+            <div>max <span class="highlight">${formatNumber(s.max)}</span></div>
+          </div>
+        </div>
+      </div>`;
+    statsArea.appendChild(card);
+  });
+}
+
+/* -------------------------
+   Anomaly detection
+   ------------------------- */
+function detectAnomalies() {
+  anomalies = new Set();
+  if (!numericCols.length) {
+    showMessage('No numeric columns available for anomaly detection.');
+    return;
+  }
+  const method = anomalyMethod.value;
+  const sdK = Number(sdMultiplierInput.value) || 3;
+  const zTh = Number(zThresholdInput.value) || 3;
+
+  // Compute per column metrics already in colStats
+  // For each row and for each numeric column, compute deviation
+  rawData.forEach((row, i) => {
+    let flagged = false;
+    for (const col of numericCols) {
+      const s = colStats[col];
+      const v = asNumber(row[col]);
+      if (isNaN(v)) continue;
+      const dev = Math.abs(v - s.mean);
+      const z = s.sd === 0 ? 0 : (v - s.mean) / s.sd;
+      const bySD = dev > sdK * s.sd;
+      const byZ = Math.abs(z) > zTh;
+      if (method === 'sd' && bySD) flagged = true;
+      if (method === 'z' && byZ) flagged = true;
+      if (method === 'both' && (bySD || byZ)) flagged = true;
+      if (flagged) break;
+    }
+    if (flagged) anomalies.add(i);
+  });
+
+  renderTable(); // highlight
+  showMessage(`Anomaly detection complete. ${anomalies.size} rows flagged.`);
+}
+
+/* -------------------------
+   Filter by anomalies toggle
+   ------------------------- */
+toggleOnlyAnomBtn.addEventListener('click', () => {
+  toggleOnlyAnomBtn.classList.toggle('active');
+  if (toggleOnlyAnomBtn.classList.contains('active')) {
+    toggleOnlyAnomBtn.classList.add('btn-danger');
+    toggleOnlyAnomBtn.classList.remove('btn-outline-secondary');
+    toggleOnlyAnomBtn.textContent = 'Showing only anomalies';
+  } else {
+    toggleOnlyAnomBtn.classList.remove('btn-danger');
+    toggleOnlyAnomBtn.classList.add('btn-outline-secondary');
+    toggleOnlyAnomBtn.textContent = 'Show only anomalies';
+  }
+  currentPage = 0;
+  renderTable();
+});
+
+/* -------------------------
+   Charting
+   ------------------------- */
+function populateColumnSelectors() {
+  // Clear
+  xColumn.innerHTML = '<option value="">(none)</option>';
+  yColumn.innerHTML = '<option value="">(none)</option>';
+  headers.forEach(h => {
+    const opt1 = document.createElement('option'); opt1.value = h; opt1.textContent = h;
+    const opt2 = document.createElement('option'); opt2.value = h; opt2.textContent = h;
+    xColumn.appendChild(opt1);
+    yColumn.appendChild(opt2);
+  });
+}
+
+drawChartBtn.addEventListener('click', () => {
+  const xCol = xColumn.value;
+  const yCol = yColumn.value;
+  const type = chartType.value;
+  if (type === 'hist') {
+    if (!yCol) { showMessage('Choose a Y column for histogram'); return; }
+    drawHistogram(yCol);
+  } else {
+    if (!yCol) { showMessage('Choose Y column'); return; }
+    if (!xCol && type === 'line') { showMessage('Choose X column for line chart'); return; }
+    drawXYChart(xCol, yCol, type);
+  }
+});
+
+function drawXYChart(xCol, yCol, type) {
+  // Use current filtered indices list (but if null use all)
+  const indices = filteredIdx ? filteredIdx.slice() : rawData.map((_,i)=>i);
+  const showOnlyAnom = toggleOnlyAnomBtn.classList.contains('active');
+  let idxList = indices;
+  if (showOnlyAnom) idxList = idxList.filter(i => anomalies.has(i));
+
+  // Build points
+  const pts = [];
+  idxList.forEach(i => {
+    const row = rawData[i];
+    const xVal = xCol ? row[xCol] : i; // fallback to index
+    const yVal = row[yCol];
+    const xParsed = tryParseDate(xVal);
+    let x = xParsed !== null ? xParsed : (isFinite(Number(xVal)) ? Number(xVal) : String(xVal));
+    const y = asNumber(yVal);
+    if (isNaN(y)) return; // skip rows w/o numeric y
+    pts.push({x, y, idx: i, label: `${xCol || 'row'}: ${x} · ${yCol}: ${y}`});
+  });
+
+  // If line & x is date or numeric, sort by x
+  if (type === 'line') {
+    pts.sort((a,b)=>{
+      if (typeof a.x === 'number' && typeof b.x === 'number') return a.x - b.x;
+      if (a.x instanceof Date && b.x instanceof Date) return a.x - b.x;
+      return String(a.x).localeCompare(String(b.x));
+    });
+  }
+
+  // Chart dataset
+  const dataset = {
+    label: `${yCol} vs ${xCol || 'index'}`,
+    data: pts.map(p => ({x: (p.x instanceof Date ? p.x.getTime() : p.x), y: p.y, idx: p.idx})),
+    showLine: type === 'line',
+    pointRadius: 3
+  };
+
+  // Destroy previous
+  if (chart) chart.destroy();
+
+  const ctx = chartCanvas.getContext('2d');
+  const config = {
+    type: (type === 'hist' ? 'bar' : 'scatter'),
+    data: { datasets: [dataset] },
+    options: {
+      plugins: { tooltip: {
+        callbacks: {
+          label: function(context) {
+            const d = context.raw;
+            const rowIdx = d.idx;
+            const row = rawData[rowIdx];
+            return [ `row ${rowIdx}`, `${xCol}: ${formatAxisValue(d.x)}`, `${yCol}: ${d.y}` ];
+          }
+        }
+      }},
+      scales: {
+        x: {
+          type: (pts.length && pts[0].x instanceof Date) ? 'time' : 'linear',
+          time: { unit: 'day' },
+          title: { display: true, text: xCol || 'index' }
+        },
+        y: { title: { display: true, text: yCol } }
+      },
+      responsive: true,
+      maintainAspectRatio: false
+    }
+  };
+  // If x values are strings (non-number), switch to category axis
+  if (pts.length && typeof pts[0].x === 'string') {
+    config.options.scales.x.type = 'category';
+    config.data = {
+      labels: pts.map(p=>String(p.x)),
+      datasets: [{ label: dataset.label, data: pts.map(p=>p.y), pointRadius: 3 }]
+    };
+  }
+  chart = new Chart(ctx, config);
+}
+
+function drawHistogram(yCol) {
+  const indices = filteredIdx ? filteredIdx.slice() : rawData.map((_,i)=>i);
+  const showOnlyAnom = toggleOnlyAnomBtn.classList.contains('active');
+  let idxList = indices;
+  if (showOnlyAnom) idxList = idxList.filter(i => anomalies.has(i));
+
+  const vals = idxList.map(i => asNumber(rawData[i][yCol])).filter(v=>!isNaN(v));
+  if (!vals.length) { showMessage('No numeric values for that column'); return; }
+  // Basic histogram buckets (Sturges)
+  const nBins = Math.ceil(Math.log2(vals.length) + 1);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const binWidth = (max - min) / nBins;
+  const bins = new Array(nBins).fill(0);
+  vals.forEach(v => {
+    let idx = Math.floor((v - min) / (binWidth || 1));
+    if (idx === nBins) idx = nBins - 1;
+    bins[idx] += 1;
+  });
+  const labels = bins.map((_,i) => {
+    const a = min + i*binWidth;
+    const b = a + binWidth;
+    return `${formatNumber(a)}–${formatNumber(b)}`;
+  });
+
+  if (chart) chart.destroy();
+  const ctx = chartCanvas.getContext('2d');
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: `Histogram of ${yCol}`, data: bins }] },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{tooltip:{enabled:true}} }
+  });
+}
+
+/* -------------------------
+   Helpers / misc actions
+   ------------------------- */
+detectBtn.addEventListener('click', detectAnomalies);
+applyFiltersBtn.addEventListener('click', () => { applyFilters(); showMessage('Filters applied.'); });
+clearFiltersBtn.addEventListener('click', () => {
+  Array.from(document.querySelectorAll('.filter-val')).forEach(i=>i.value='');
+  Array.from(document.querySelectorAll('.filter-op')).forEach(i=>i.value='contains');
+  filteredIdx = null;
+  currentPage = 0;
+  renderTable();
+  showMessage('Filters cleared.');
+});
+
+rowsPerPageSelect.addEventListener('change', () => { currentPage = 0; renderTable();});
+prevPageBtn.addEventListener('click', () => { if (currentPage>0) currentPage--; renderTable();});
+nextPageBtn.addEventListener('click', () => { currentPage++; renderTable();});
+
+downloadFilteredBtn.addEventListener('click', () => {
+  // build CSV from current view
+  const indices = filteredIdx ? filteredIdx.slice() : rawData.map((_,i)=>i);
+  const showOnlyAnom = toggleOnlyAnomBtn.classList.contains('active');
+  let idxList = indices;
+  if (showOnlyAnom) idxList = idxList.filter(i => anomalies.has(i));
+  // Use Papa unparse
+  const rows = idxList.map(i => rawData[i]);
+  const csv = Papa.unparse(rows);
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'filtered_view.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+
+/* -------------------------
+   Tiny helpers
+   ------------------------- */
+function formatNumber(n) { return (n === undefined || n === null || isNaN(n)) ? '' : Number(n).toLocaleString(undefined, {maximumFractionDigits:6}); }
+function escapeHtml(s) { if (s === null || s === undefined) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function tryParseDate(v) {
+  if (!v && v !== 0) return null;
+  // try ISO parse
+  const d = new Date(v);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+}
+function formatAxisValue(x) {
+  if (x instanceof Date) return x.toISOString();
+  if (typeof x === 'number') return formatNumber(x);
+  return String(x);
+}
+function showMessage(msg, isError=false) {
+  // small transient message using alert()
+  const existing = document.getElementById('__msg_box');
+  if (existing) existing.remove();
+  const box = document.createElement('div');
+  box.id = '__msg_box';
+  box.className = `toast align-items-center text-bg-${isError ? 'danger' : 'dark'} border-0`;
+  box.style.position = 'fixed';
+  box.style.right = '20px';
+  box.style.bottom = '20px';
+  box.style.zIndex = 9999;
+  box.innerHTML = `<div class="d-flex"><div class="toast-body">${escapeHtml(msg)}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" aria-label="Close"></button></div>`;
+  document.body.appendChild(box);
+  box.querySelector('.btn-close').addEventListener('click', ()=>box.remove());
+  setTimeout(()=>{ if (box.parentNode) box.remove(); }, 6000);
+}
+
+/* -------------------------
+   Initialization: set defaults
+   ------------------------- */
+rowsPerPageSelect.value = '25';
+toggleOnlyAnomBtn.classList.add('btn','btn-outline-secondary');
+toggleOnlyAnomBtn.textContent = 'Show only anomalies';
+showMessage('CSV Quick Analyzer ready — upload a CSV to begin.');
+
+</script>
+</body>
+</html>
